@@ -1,0 +1,11 @@
+dir_source = '.'
+dir_build = 'build'
+dir_js = 'js'
+dir_css = 'main.css'
+
+file_root_page = 'index.html'
+file_root_script = 'main.js'
+
+# tool options
+htmlcompressor_options = ''
+jsminifier_options = ''

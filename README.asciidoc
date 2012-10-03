@@ -1,0 +1,3 @@
+Build system for web projects.
+
+Inspired by `ant-build-script`, but using `waf` as a build system.

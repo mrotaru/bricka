@@ -1,0 +1,7 @@
+waf
+waf-*
+.lock-waf*
+*.html
+*.js
+*.pyc
+build/
