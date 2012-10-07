@@ -7,13 +7,13 @@ def configure( ctx ):
     ctx.env = ConfigSet('config/default.txt')
 
     # load tools
-    ctx.load( 'htmlcompressor' )
+#    ctx.load( 'htmlcompressor' )
     ctx.load( 'minifier' )
 
 def build( bld ):
 
-    # which files to process ? By default, all html and js
-    sources = bld.path.ant_glob( ['**/*.html', '**/*.js'] )
+    # look for html files, which will be compressed.
+    sources = bld.path.ant_glob( ['**/*.html'] )
 
     for s in sources:
         bld( source=s )
