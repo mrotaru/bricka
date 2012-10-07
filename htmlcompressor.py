@@ -12,7 +12,7 @@ from waflib import Task, Utils
 from waflib.TaskGen import extension, feature
 
 class compress_html( Task.Task ):
-    color = 'BLUE'
+    color = 'PINK'
     run_str = 'java -jar ${htmlcompressor_abspath} ${htmlcompressor_options} ${SRC} -o ${TGT}'
 
 @extension( '.html', '.php' )
