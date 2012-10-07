@@ -63,13 +63,14 @@ def html_hook( self, node ):
 
     # create a minification task for scripts that are local
     for script in scripts:
-        script_node = self.bld.path.find_resource( script )
-        if( script_node ):
-            dest_script_node = self.bld.path.get_bld().make_node( script )
-            print str(dest_script_node)
-            self.create_task( 'minify_js', script_node, dest_script_node )
+        if( not script.endswith('.min.js') ):
+            script_node = self.bld.path.find_resource( script )
+            if( script_node ):
+                self.create_task( 'minify_js', script_node, script_node.change_ext('.min.js' ) )
+            else:
+                Logs.warn( 'minify: script referenced in %s not found: %s' % (node.abspath(), script) )
         else:
-            Logs.warn( 'minify: script referenced in %s not found: %s' % (node.abspath(), script) )
+            Logs.debug( 'minify: ignoring %s because it\'s filename suggests it is already minified.' )
 
 def configure( conf ):
     conf.env['closure_compiler'] = os.path.abspath( conf.find_file( 'closure-compiler-v1346.jar', ['.','./tools' ] ) )
