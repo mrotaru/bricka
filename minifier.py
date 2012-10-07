@@ -10,15 +10,26 @@ import os
 import re
 from HTMLParser import HTMLParser
 
-from waflib import Task
-from waflib.TaskGen import extension
+from waflib.Task import Task
+from waflib.TaskGen import extension, after_method, before_method
 from waflib import Logs
 
 # use ClosureCompiler to minify a JavaScript file
 #-------------------------------------------------------------------------------
-class minify_js( Task.Task ):
+class minify_js( Task ):
     color = 'CYAN'
     run_str = 'java -jar ${closure_compiler} ${jsminifier_options} --js ${SRC} --js_output_file ${TGT}'
+
+# generate new HTML file, with script tags pointing to the generated minified versions
+#-------------------------------------------------------------------------------
+class update_html( Task ):
+    color = 'BROWN'
+
+    def myfunc( self ):
+        print( self.tasks )
+
+    def run( self ):
+        return self.myfunc()
 
 # from: http://stackoverflow.com/a/11659969/447661
 #-------------------------------------------------------------------------------
@@ -71,6 +82,12 @@ def html_hook( self, node ):
                 Logs.warn( 'minify: script referenced in %s not found: %s' % (node.abspath(), script) )
         else:
             Logs.debug( 'minify: ignoring %s because it\'s filename suggests it is already minified.' )
+    
+    # generate new HTML file, with script tags pointing to the generated minified versions
+    update_html_task = update_html( env = self.bld.env )
+    update_html_task.tasks = self.tasks
+    update_html_task.bld = self.bld
+    self.tasks.append( update_html_task )
 
 def configure( conf ):
     conf.env['closure_compiler'] = os.path.abspath( conf.find_file( 'closure-compiler-v1346.jar', ['.','./tools' ] ) )
