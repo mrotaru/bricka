@@ -23,7 +23,7 @@ class minify_js( Task ):
 # generate new HTML file, with script tags pointing to the generated minified versions
 #-------------------------------------------------------------------------------
 class update_html( Task ):
-    color = 'BROWN'
+    color = 'PINK'
     after = [ 'minify_js' ]
 
     def myfunc( self ):
@@ -34,12 +34,11 @@ class update_html( Task ):
     def run( self ):
         return self.myfunc()
 
-# replacement_scripts: a list of tuples with replacements to be made
-# Ex: [ (2, 10), 'js/main.js', 'js/main.min.js'] [ (3, 20), 'js/plugin.js', 'js/plugin.min.js' ] ]
-# The list has two items - meaning two scripts were minified, and therefore two
-# replacements need to be mande. The first item means that the first script tag
-# is located on line 2, column 10 in the HTML file, and the following two
-# strings represent the old and the new value of the `src` attribute.
+# `data` - the contents of the HTML file; `tasks` - minificatino tasks. Each
+# task has the position in the HTML data where the script tag is mentioned.
+# This informaiton is used in this function to update `script` tags to point to
+# the minified version of each script. Only tasks that have successfully ran
+# are considered.
 #-------------------------------------------------------------------------------
 def replace_scripts( data, tasks ):
     lines = data.split('\n')
