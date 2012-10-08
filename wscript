@@ -13,7 +13,7 @@ def configure( ctx ):
 def build( bld ):
 
     # look for html files, which will be compressed.
-    sources = bld.path.ant_glob( ['**/*.html'] )
+    sources = bld.path.ant_glob( ['*.html'], exc='build' )
 
     for s in sources:
         bld( source=s )
