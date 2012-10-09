@@ -8,11 +8,25 @@ A waf tool for minifying javascript.
 
 import os
 import re
+from hashlib import md5
 from HTMLParser import HTMLParser
 
 from waflib.Task import Task
 from waflib.TaskGen import extension, after_method, before_method
-from waflib import Logs, Errors
+from waflib import Logs, Errors, Utils
+
+# return hex MD5 digest of `file`
+#-------------------------------------------------------------------------------
+def h_file_hex( fname ):
+	f = open( fname,'rb' )
+	m = md5()
+	try:
+		while fname:
+			fname=f.read( 200000 )
+			m.update( fname )
+	finally:
+		f.close()
+	return m.hexdigest()
 
 # use ClosureCompiler to minify a JavaScript file
 #-------------------------------------------------------------------------------
@@ -109,7 +123,8 @@ def html_hook( self, node ):
         if( not script.endswith('.min.js') ):
             script_node = self.bld.path.find_resource( script )
             if( script_node ):
-                tgt = script_node.change_ext( '.min.js' )
+                src_md5 = h_file_hex( script_node.abspath() )
+                tgt = script_node.change_ext( '.' + src_md5[:7] + '.min.js' )
                 tsk = self.create_task( 'minify_js', script_node, tgt )
                 tsk.html_position = script_tuple[0]
             else:
