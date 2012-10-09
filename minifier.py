@@ -34,11 +34,17 @@ class minify_js( Task ):
     color = 'CYAN'
     run_str = 'java -jar ${closure_compiler} ${jsminifier_options} --js ${SRC} --js_output_file ${TGT}'
 
+# use YUI Compressor to minify a JavaScript file
+#-------------------------------------------------------------------------------
+class minify_css( Task ):
+    color = 'CYAN'
+    run_str = 'java -jar ${yui_compressor} ${yui_compressor_options} ${SRC} -o ${TGT}'
+
 # generate new HTML file, with script tags pointing to the generated minified versions
 #-------------------------------------------------------------------------------
 class update_html( Task ):
     color = 'PINK'
-    after = [ 'minify_js' ]
+    after = [ 'minify_js', 'minify_css' ]
 
     def myfunc( self ):
         on = self.outputs[0]
@@ -92,8 +98,13 @@ class Gather_HTMLParser( HTMLParser ):
     # each detected CDN js file will be added to this list
     cdn_scripts = []
 
-    # find referenced js files
+    # css files
+    css_files = []
+
+    # find referenced js and css files
     def handle_starttag( self, tag, attrs ):
+
+        # JavaScript
         if( tag == 'script' ):
             for name,value in attrs:
                 if( name == 'src' ):
@@ -108,6 +119,28 @@ class Gather_HTMLParser( HTMLParser ):
                         local_script.append( value )
                         self.local_scripts.append( local_script )
 
+        # CSS
+        elif( tag == 'link' ):
+            is_css = False
+            have_href = False
+            html_position = self.getpos()
+            css_href = ''
+
+            # process attributes of the 'link' tag
+            for name,value in attrs:
+                if( name == 'rel' and value == 'stylesheet' ):
+                    is_css = True
+                elif( name == 'href' ):
+                    css_href = value
+
+            # add to list of CSS files
+            if( is_css ):
+                if( css_href ):
+                    css_file = []
+                    css_file.append( html_position )
+                    css_file.append( css_href )
+                    self.css_files.append( css_file )
+
 @extension( '.html' )
 def html_hook( self, node ):
 
@@ -116,21 +149,28 @@ def html_hook( self, node ):
     html_contents = read_entirely( node.abspath() )
     parser.feed( html_contents )
     scripts = parser.local_scripts
+    css_files = parser.css_files
+    js_and_css = scripts + css_files
+    print js_and_css
 
-    # create a minification task for scripts that are local
-    for script_tuple in scripts:
-        script = script_tuple[1]
-        if( not script.endswith('.min.js') ):
-            script_node = self.bld.path.find_resource( script )
-            if( script_node ):
-                src_md5 = h_file_hex( script_node.abspath() )
-                tgt = script_node.change_ext( '.' + src_md5[:7] + '.min.js' )
-                tsk = self.create_task( 'minify_js', script_node, tgt )
-                tsk.html_position = script_tuple[0]
+    # create a minification task for each local script
+    for src_tuple in js_and_css:
+        src = src_tuple[1]
+        if( not src.endswith('.min.js') or src.endswith( '.min.css' ) ):
+            src_node = self.bld.path.find_resource( src )
+            if( src_node ): # if the referenced file really exists
+                src_md5 = h_file_hex( src_node.abspath() )
+                if( src.endswith( '.js' ) ):
+                    tgt = src_node.change_ext( '.' + src_md5[:7] + '.min.js' )
+                    tsk = self.create_task( 'minify_js', src_node, tgt )
+                elif( src.endswith( '.css' ) ):
+                    tgt = src_node.change_ext( '.' + src_md5[:7] + '.min.css' )
+                    tsk = self.create_task( 'minify_css', src_node, tgt )
+                tsk.html_position = src_tuple[0]
             else:
-                Logs.warn( 'minify: script referenced in %s not found: %s' % (node.abspath(), script) )
+                Logs.warn( 'minify: item referenced in %s on line %s not found: %s' % (node.abspath(), src_tuple[0][0], src) )
         else:
-            Logs.warn( 'minify: ignoring %s because it\'s filename suggests it is already minified.' % script )
+            Logs.warn( 'minify: ignoring %s because it\'s filename suggests it is already minified.' % src )
     
     # generate a task for creating the new HTML file, with script tags pointing to
     # the generated minified versions. This task will have a 'tasks' attribute, a
@@ -141,4 +181,5 @@ def html_hook( self, node ):
     update_html_task.html_contents = html_contents
 
 def configure( conf ):
-    conf.env['closure_compiler'] = os.path.abspath( conf.find_file( 'closure-compiler-v1346.jar', ['.','./tools' ] ) )
+    conf.env['closure_compiler']    = os.path.abspath( conf.find_file( 'closure-compiler-v1346.jar', ['.','./tools' ] ) )
+    conf.env['yui_compressor']      = os.path.abspath( conf.find_file( 'yuicompressor-2.4.7.jar', ['.','./tools' ] ) )

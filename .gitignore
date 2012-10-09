@@ -4,3 +4,4 @@ waf-*
 *.js
 *.pyc
 build/
+css/
