@@ -142,7 +142,7 @@ class Gather_HTMLParser( HTMLParser ):
                     self.css_files.append( css_file )
 
 @extension( '.html' )
-def html_hook( self, node ):
+def generate_minification_tasks( self, node ):
 
     # scan the HTML file for script tags
     parser = Gather_HTMLParser()
@@ -151,7 +151,6 @@ def html_hook( self, node ):
     scripts = parser.local_scripts
     css_files = parser.css_files
     js_and_css = scripts + css_files
-    print js_and_css
 
     # create a minification task for each local script
     for src_tuple in js_and_css:
