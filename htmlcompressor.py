@@ -8,22 +8,33 @@ A waf tool for **htmlcompressor**
 
 import os
 from waflib.Configure import conf
-from waflib import Task, Utils
-from waflib.TaskGen import extension, feature
+from waflib.Task import Task
+from waflib import Utils
+from waflib.TaskGen import extension, feature, after
 
-class compress_html( Task.Task ):
+class compress_html( Task ):
+    after = [ 'minify_js', 'minify_css', 'update_html' ]
     color = 'PINK'
     run_str = 'java -jar ${htmlcompressor_abspath} ${htmlcompressor_options} ${SRC} -o ${TGT}'
 
-@extension( '.html', '.php' )
-def html_hook( self, node ):
-    """
-    Bind the html extension to the compress_html task
+@feature( 'html' )
+@after( 'generate_minification_tasks' )
+def generate_html_compression_tasks( self ):
 
-    :param node: input file
-    :type node: :py:class:`waflib.Node.Node`
-    """
-    self.create_task( 'compress_html', node, node.get_bld() )
+    for node in self.source_list:
+        if( self.env[ 'closure_compiler' ] ):
+
+            # find the 'update_html' task for this node, and get it's output node
+            for tsk in self.tasks:
+                if( tsk.__class__.__name__ == 'update_html' ):
+                    if( tsk.inputs[0].abspath() == node.abspath() ):
+                        src = tsk.outputs[0]
+                        out = self.path.make_node( str(node) )
+        else: # minifier not loaded
+            src = node
+            out = node.get_bld()
+
+        self.create_task( 'compress_html', src, out )
 
 def configure( conf ):
     conf.find_program( 'java' )

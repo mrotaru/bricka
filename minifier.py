@@ -12,7 +12,8 @@ from hashlib import md5
 from HTMLParser import HTMLParser
 
 from waflib.Task import Task
-from waflib.TaskGen import extension, after_method, before_method
+from waflib.Node import Node
+from waflib.TaskGen import extension, after_method, before_method, feature
 from waflib import Logs, Errors, Utils
 
 # return hex MD5 digest of `file`
@@ -45,6 +46,7 @@ class minify_css( Task ):
 class update_html( Task ):
     color = 'PINK'
     after = [ 'minify_js', 'minify_css' ]
+    before = [ 'compress_html' ]
 
     def myfunc( self ):
         on = self.outputs[0]
@@ -141,43 +143,48 @@ class Gather_HTMLParser( HTMLParser ):
                     css_file.append( css_href )
                     self.css_files.append( css_file )
 
-@extension( '.html' )
-def generate_minification_tasks( self, node ):
+@feature( 'html' )
+def generate_minification_tasks( self ):
 
-    # scan the HTML file for script tags
-    parser = Gather_HTMLParser()
-    html_contents = read_entirely( node.abspath() )
-    parser.feed( html_contents )
-    scripts = parser.local_scripts
-    css_files = parser.css_files
-    js_and_css = scripts + css_files
+    for node in self.source_list:
 
-    # create a minification task for each local script
-    for src_tuple in js_and_css:
-        src = src_tuple[1]
-        if( not src.endswith('.min.js') or src.endswith( '.min.css' ) ):
-            src_node = self.bld.path.find_resource( src )
-            if( src_node ): # if the referenced file really exists
-                src_md5 = h_file_hex( src_node.abspath() )
-                if( src.endswith( '.js' ) ):
-                    tgt = src_node.change_ext( '.' + src_md5[:7] + '.min.js' )
-                    tsk = self.create_task( 'minify_js', src_node, tgt )
-                elif( src.endswith( '.css' ) ):
-                    tgt = src_node.change_ext( '.' + src_md5[:7] + '.min.css' )
-                    tsk = self.create_task( 'minify_css', src_node, tgt )
-                tsk.html_position = src_tuple[0]
+        # scan the HTML file for script tags
+        parser = Gather_HTMLParser()
+        html_contents = read_entirely( node.abspath() )
+        parser.feed( html_contents )
+        scripts = parser.local_scripts
+        css_files = parser.css_files
+        js_and_css = scripts + css_files
+
+        # create a minification task for each local script
+        for src_tuple in js_and_css:
+            src = src_tuple[1]
+            if( not src.endswith('.min.js') or src.endswith( '.min.css' ) ):
+                src_node = self.bld.path.find_resource( src )
+                if( src_node ): # if the referenced file really exists
+                    src_md5 = h_file_hex( src_node.abspath() )
+                    if( src.endswith( '.js' ) ):
+                        tgt = src_node.change_ext( '.' + src_md5[:7] + '.min.js' )
+                        tsk = self.create_task( 'minify_js', src_node, tgt )
+                    elif( src.endswith( '.css' ) ):
+                        tgt = src_node.change_ext( '.' + src_md5[:7] + '.min.css' )
+                        tsk = self.create_task( 'minify_css', src_node, tgt )
+                    tsk.html_position = src_tuple[0]
+                else:
+                    Logs.warn( 'minify: item referenced in %s on line %s not found: %s' % (node.abspath(), src_tuple[0][0], src) )
             else:
-                Logs.warn( 'minify: item referenced in %s on line %s not found: %s' % (node.abspath(), src_tuple[0][0], src) )
+                Logs.warn( 'minify: ignoring %s because it\'s filename suggests it is already minified.' % src )
+        
+        # generate a task for creating the new HTML file, with script tags pointing to
+        # the generated minified versions. This task will have a 'tasks' attribute, a
+        # list of all the minification tasks. `tasks` will be used to update the HTML
+        # only for successfull minifications.
+        if( self.env[ 'htmlcompressor_abspath' ] ):
+            update_html_task = self.create_task( 'update_html', node, node.change_ext( '.tmp.html' ) )
         else:
-            Logs.warn( 'minify: ignoring %s because it\'s filename suggests it is already minified.' % src )
-    
-    # generate a task for creating the new HTML file, with script tags pointing to
-    # the generated minified versions. This task will have a 'tasks' attribute, a
-    # list of all the minification tasks. `tasks` will be used to update the HTML
-    # only for successfull minifications.
-    update_html_task = self.create_task( 'update_html', node, node.get_bld() )
-    update_html_task.tasks = self.tasks[:-1]
-    update_html_task.html_contents = html_contents
+            update_html_task = self.create_task( 'update_html', node, node.get_bld() )
+        update_html_task.tasks = self.tasks[:-1]
+        update_html_task.html_contents = html_contents
 
 def configure( conf ):
     conf.env['closure_compiler']    = os.path.abspath( conf.find_file( 'closure-compiler-v1346.jar', ['.','./tools' ] ) )
