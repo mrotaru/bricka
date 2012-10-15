@@ -9,18 +9,26 @@ A waf tool for **htmlcompressor**
 import os
 from waflib.Configure import conf
 from waflib.Task import Task
-from waflib import Utils
-from waflib.TaskGen import extension, feature, after
+from waflib.Node import split_path
+from waflib.TaskGen import extension, feature, after, after_method
+from waflib import Utils, Errors
 
-class compress_html( Task ):
-    after = [ 'minify_js', 'minify_css', 'update_html' ]
+class compress_html_base( Task ):
     color = 'PINK'
     run_str = 'java -jar ${htmlcompressor_abspath} ${htmlcompressor_options} ${SRC} -o ${TGT}'
 
-@feature( 'html' )
-@after( 'generate_minification_tasks' )
-def generate_html_compression_tasks( self ):
+class compress_html( compress_html_base ):
+    after = [ 'update_html' ]
+    def run( self ):
+        compress_html_base.run( self )
+        if( self.env[ 'closure_compiler' ] ):
+            os.remove( self.inputs[0].abspath() )
 
+@feature( 'html' )
+@after_method( 'generate_minification_tasks' )
+def generate_html_compression_tasks( self ):
+    src = None
+    out = None
     for node in self.source_list:
         if( self.env[ 'closure_compiler' ] ):
 
@@ -29,7 +37,9 @@ def generate_html_compression_tasks( self ):
                 if( tsk.__class__.__name__ == 'update_html' ):
                     if( tsk.inputs[0].abspath() == node.abspath() ):
                         src = tsk.outputs[0]
-                        out = self.path.make_node( str(node) )
+                        abspath_out = os.path.join( self.bld.get_variant_dir(), split_path(tsk.inputs[0].abspath())[-1] )
+                        out = self.bld.root.make_node( abspath_out )
+                        break
         else: # minifier not loaded
             src = node
             out = node.get_bld()

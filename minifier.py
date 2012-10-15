@@ -46,7 +46,6 @@ class minify_css( Task ):
 class update_html( Task ):
     color = 'PINK'
     after = [ 'minify_js', 'minify_css' ]
-    before = [ 'compress_html' ]
 
     def myfunc( self ):
         on = self.outputs[0]
