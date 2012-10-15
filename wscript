@@ -9,6 +9,7 @@ def configure( ctx ):
     # load tools
     ctx.load( 'minifier' )
     ctx.load( 'htmlcompressor' )
+    ctx.load( 'concat' )
 
 def build( bld ):
 

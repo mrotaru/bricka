@@ -29,30 +29,60 @@ class GetConcatBlocks( HTMLParser ):
     
     wbs_concat_regex    = re.compile( '\s*wbs:\s*concat\s*>\s*([A-Za-z.\-]+)\s*' )
     wbs_end_regex       = re.compile( '\s*wbs:\s*end\s*' )
-    inside = False
-    blocks = []
+
+    # regexes for CDNs
+    google_cdn_regex        = re.compile( r'//ajax.googleapis.com/ajax/libs/(.*?)/(.*?)/(.*)\.js' )
+    microsoft_cdn_regex     = re.compile( r'//ajax.aspnetcdn.com/ajax/(.*?)/(.*)\.js' )
+    cdnjs_cdn_regex         = re.compile( r'//cdnjs.cloudflare.com/ajax/libs/(.*?)/(.*?)/(.*)\.js' )
+
+    def __init__( self ):
+        HTMLParser.__init__( self )
+        self.inside = False
+        self.blocks = {}
+        self.current_block = None
 
     def handle_comment( self, data ):
 
         # start of concat block ?
         match_start = self.wbs_concat_regex.search( data )
         if match_start:
-            print "start %s" % match_start.group(1)
-
-            inside = True
+            out_file = match_start.group(1)
+            print "start %s" % out_file
+            self.blocks[ out_file ] = {}
+            self.current_block = self.blocks[ out_file ]
+            self.current_block['start'] = self.getpos()[0]
+            self.current_block['files'] = []
+            self.inside = True
         else:
             # end of concat block ?
             match_end = self.wbs_end_regex.search( data )
             if match_end:
-                print "<end>"
-                inside = False
+                self.current_block[ 'end'] = self.getpos()[0]
+                self.inside = False
     
     def handle_starttag( self, tag, attrs ):
-        if tag == 'link':
-            print "encountered a link: " + str(attrs)
-
-    def handle_endtag( self, tag ):
-        pass
+        if tag == 'script':
+            if self.inside:
+                for name,value in attrs:
+                    if name == 'src':
+                        if(     self.google_cdn_regex.search( value ) or
+                                self.microsoft_cdn_regex.search( value ) or
+                                self.cdnjs_cdn_regex.search( value ) ):
+                            Logs.warn( 'concat: ignoring CDN script: %s' % value )
+                        else:
+                            self.current_block['files'].append( value )
+        elif tag == 'link':
+            if self.inside:
+                is_css = False
+                css_href = ''
+                for name,value in attrs:
+                    if( name == 'rel' and value == 'stylesheet' ):
+                        is_css = True
+                    elif( name == 'href' ):
+                        css_href = value
+                if( is_css ):
+                    if( css_href ):
+                        self.current_block['files'].append( css_href )
 
 # from: http://stackoverflow.com/a/11659969/447661
 #-------------------------------------------------------------------------------
@@ -69,7 +99,9 @@ def concatenate_files( dest, *files ):
 
 # will scan the file, concatenate detected scripts and update `file`
 #-------------------------------------------------------------------------------
-@extension( '.html' )
-def scan_for_concatenations( self, node ):
-    p = GetConcatBlocks()
-    p.feed( read_entirely( node.abspath() ) )
+@feature( 'html' )
+def scan_for_concatenations( self ):
+    for node in self.source_list:
+        p = GetConcatBlocks()
+        p.feed( read_entirely( node.abspath() ) )
+        print p.blocks
