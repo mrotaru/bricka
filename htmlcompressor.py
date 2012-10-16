@@ -13,6 +13,8 @@ from waflib.Node import split_path
 from waflib.TaskGen import extension, feature, after, after_method
 from waflib import Utils, Errors
 
+import utils
+
 class compress_html_base( Task ):
     color = 'PINK'
     run_str = 'java -jar ${htmlcompressor_abspath} ${htmlcompressor_options} ${SRC} -o ${TGT}'
@@ -30,16 +32,15 @@ def generate_html_compression_tasks( self ):
     src = None
     out = None
     for node in self.source_list:
-        if( self.env[ 'closure_compiler' ] ):
+        tools = self.bld.tools
+        if 'minifier' in tools:
 
             # find the 'update_html' task for this node, and get it's output node
-            for tsk in self.tasks:
-                if( tsk.__class__.__name__ == 'update_html' ):
-                    if( tsk.inputs[0].abspath() == node.abspath() ):
-                        src = tsk.outputs[0]
-                        abspath_out = os.path.join( self.bld.get_variant_dir(), split_path(tsk.inputs[0].abspath())[-1] )
-                        out = self.bld.root.make_node( abspath_out )
-                        break
+            tsk = utils.find_task( self, 'update_html', node.abspath() )
+            if tsk:
+                src = tsk.outputs[0]
+                abspath_out = os.path.join( self.bld.get_variant_dir(), split_path(tsk.inputs[0].abspath())[-1] )
+                out = self.bld.root.make_node( abspath_out )
         else: # minifier not loaded
             src = node
             out = node.get_bld()
