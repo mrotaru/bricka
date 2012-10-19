@@ -1,3 +1,4 @@
+# vim: filetype=python:
 from waflib.ConfigSet import ConfigSet
 from waflib.Node import Node
 
@@ -7,9 +8,9 @@ def configure( ctx ):
     ctx.env = ConfigSet('config/default.txt')
 
     # load tools
-    ctx.load( 'minifier' )
-    ctx.load( 'htmlcompressor' )
-    ctx.load( 'concat' )
+    ctx.load( 'minifier', tooldir='.' )
+#    ctx.load( 'compressor', tooldir='.' )
+#    ctx.load( 'concat', tooldir='.' )
 
 def build( bld ):
 

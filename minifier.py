@@ -44,8 +44,8 @@ class minify_css( Task ):
 # generate new HTML file, with script tags pointing to the generated minified versions
 #-------------------------------------------------------------------------------
 class update_html( Task ):
-    color = 'PINK'
     after = [ 'minify_js', 'minify_css' ]
+    color = 'PINK'
 
     def myfunc( self ):
         on = self.outputs[0]
@@ -174,14 +174,11 @@ def generate_minification_tasks( self ):
             else:
                 Logs.warn( 'minify: ignoring %s because it\'s filename suggests it is already minified.' % src )
         
-        # generate a task for creating the new HTML file, with script tags pointing to
-        # the generated minified versions. This task will have a 'tasks' attribute, a
-        # list of all the minification tasks. `tasks` will be used to update the HTML
-        # only for successfull minifications.
-        if( self.env[ 'htmlcompressor_abspath' ] ):
-            update_html_task = self.create_task( 'update_html', node, node.change_ext( '.tmp.html' ) )
-        else:
-            update_html_task = self.create_task( 'update_html', node, node.get_bld() )
+        # generate a task for creating the new HTML file, referencing the minified js
+        # and css files. This task will have a 'tasks' attribute, a list of all the
+        # minification tasks. `tasks` will be used to update the HTML only for
+        # successfull minifications.
+        update_html_task = self.create_task( 'update_html', node, node.get_bld() )
         update_html_task.tasks = self.tasks[:-1]
         update_html_task.html_contents = html_contents
 

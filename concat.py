@@ -17,13 +17,25 @@ And:
 """
 
 import re
+import os
 from HTMLParser import HTMLParser
 
-from waflib.TaskGen import extension, feature
+from waflib.TaskGen import extension, feature, after_method
+from waflib.Task import Task
 
-# extracts blocks which contain stuff to be concatenated Using the example at
+import utils
+
+class concatenate( Task ):
+    def run( self ):
+        print 'files: '
+        print self.files
+
+class update_after_concat( Task ):
+    pass
+
+# {{{ extracts blocks which contain stuff to be concatenated Using the example at
 # the top, after parsing is complete, `blocks` would contain two items, each
-# with two strings pointing to the respective files.
+# with two strings pointing to the respective files. 
 #-------------------------------------------------------------------------------
 class GetConcatBlocks( HTMLParser ):
     
@@ -47,7 +59,6 @@ class GetConcatBlocks( HTMLParser ):
         match_start = self.wbs_concat_regex.search( data )
         if match_start:
             out_file = match_start.group(1)
-            print "start %s" % out_file
             self.blocks[ out_file ] = {}
             self.current_block = self.blocks[ out_file ]
             self.current_block['start'] = self.getpos()[0]
@@ -82,13 +93,28 @@ class GetConcatBlocks( HTMLParser ):
                         css_href = value
                 if( is_css ):
                     if( css_href ):
-                        self.current_block['files'].append( css_href )
+                        self.current_block['files'].append( css_href ) # }}}
 
 # from: http://stackoverflow.com/a/11659969/447661
 #-------------------------------------------------------------------------------
 def read_entirely( file ):
     with open( file, 'r' ) as handle:
         return handle.read()
+
+class scan_for_concatenations( Task ):
+    after = [ 'update_html' ]
+
+    def run( self ):
+        p = GetConcatBlocks()
+        p.feed( read_entirely( self.inputs[0].abspath() ) )
+        blocks = p.blocks
+
+        for concat_target in blocks.keys():
+            print 'concatenating ' + concat_target
+            tgt = self.generator.bld.path.make_node( concat_target )
+            tgt.parent.mkdir()
+            tsk = self.generator.create_task( 'concatenate', None, tgt, )
+            tsk.files = blocks[ concat_target ][ 'files' ]
 
 # generate a file which will consist of all files in `files` concatenated
 #-------------------------------------------------------------------------------
@@ -97,11 +123,18 @@ def concatenate_files( dest, *files ):
     with open(file, 'w') as handle:
         handle.write( result )
 
-# will scan the file, concatenate detected scripts and update `file`
-#-------------------------------------------------------------------------------
 @feature( 'html' )
-def scan_for_concatenations( self ):
+@after_method( 'generate_minification_tasks' )
+def generate_concatenation_tasks( self ):
     for node in self.source_list:
-        p = GetConcatBlocks()
-        p.feed( read_entirely( node.abspath() ) )
-        print p.blocks
+
+        tools = self.bld.tools
+        if 'minifier' in tools:
+            tsk = utils.find_task( self, 'update_html', node.abspath() )
+            if tsk:
+                node = tsk.outputs[0]
+            
+        tsk = self.create_task( 'scan_for_concatenations', node, None )
+
+def configure( conf ):
+    pass
