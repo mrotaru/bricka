@@ -19,6 +19,7 @@ And:
 import re
 import os
 from HTMLParser import HTMLParser
+from string import join
 
 from waflib.TaskGen import extension, feature, after_method, taskgen_method
 from waflib.Task import Task
@@ -70,6 +71,8 @@ class GetConcatBlocks( HTMLParser ):
             # end of concat block ?
             match_end = self.wbs_end_regex.search( data )
             if match_end:
+                if not self.inside:
+                    Logs.error( 'concat: detected a closing statement, but no opening was detected earlier. Line: %d' % self.getpos()[0] )
                 self.current_block[ 'end'] = self.getpos()[0]
                 self.inside = False
     
@@ -103,23 +106,82 @@ def read_entirely( file ):
     with open( file, 'r' ) as handle:
         return handle.read()
 
+def get_offset_above( offsets, line_no ):
+    """
+    Returns the sum of all offsets above line_no
+    offsets: a dictionary with the form: { '2':4, '10':3 }
+    line_no: a line number
+    """
+    ret = 0
+    for offset_k in offsets:
+        if int(offset_k) <= int(line_no):
+            ret = ret + offsets[ offset_k ]
+    return ret
+
 # update the HTML file to reference the concatenated files
 #-------------------------------------------------------------------------------
 def update_concat_fun( task ):
-    pass
+    node = task.inputs[0]
+    html_contents = task.generator.html_contents
+    lines = html_contents.split('\n')
+    offsets = {}
+
+    for block in task.generator.blocks:
+        concatenated = block
+        block = task.generator.blocks[block]
+        Logs.debug('processing block: %s\n' % concatenated )
+
+        # convert indexes to zero-based, and take into account previous deletions
+        offset = get_offset_above( offsets, block['start']-1 )
+        start = block['start']-1-offset
+        end   = block['end']-1-offset
+        offsets[ start ] = end - start
+
+        Logs.debug('offsets: %r' % offsets)
+        Logs.debug('script %s on line %s to %s' % (concatenated, start, end ))
+        Logs.debug('start: %s, end: %s' % (start, end))
+
+        indentation = utils.first_non_blank( lines[ start ] )
+        newline = ''
+        if concatenated.endswith('.css') or concatenated.endswith('.js'):
+            if concatenated.endswith('.css'):
+                newline = ' ' * indentation + '<link rel="stylesheet" href="' + concatenated + '">'
+            else:
+                newline = ' ' * indentation + '<script src="' + concatenated + '"></script>'
+            lines[ start ] = newline
+            Logs.debug('new line, n: %s is %s' % ( start,lines[ start ]) )
+            del_start = start+1
+            del_end = end+1
+            Logs.debug('deleting lines %s-%s: %s' % ( del_start, del_end, '\n'.join(lines[ del_start:del_end ])))
+            del lines[ del_start:del_end ]
+            Logs.debug('offset: %s' % offset )
+            Logs.debug('lines left: %s' % len( lines ) )
+        else:
+            Logs.warn('concat: Don\'t know how to insert %s into html; skipping...' % concatenated )
+            continue
+    
+    html_contents = '\n'.join( [ l for l in lines if l is not None ] )
+
+    with open( task.inputs[0].get_bld().abspath(), 'w') as handle:
+        handle.write( html_contents )
 
 #-------------------------------------------------------------------------------
 def get_bocks( abspath ):
     p = GetConcatBlocks()
-    p.feed( read_entirely( abspath ) )
-    return p.blocks
+    html_contents = read_entirely( abspath )
+    p.feed( html_contents )
+    if p.inside:
+        Logs.error('unclosed "build" instruction, started in %s on line %s' % (abspath, p.current_block['start']))
+    return html_contents, p.blocks
 
 #-------------------------------------------------------------------------------
 class generate_concatenation_tasks( Task ):
     after = [ 'minifier_update' ]
 
     def run( self ):
-        blocks = get_bocks( self.inputs[0].abspath() )
+        print 'src: %s' % self.inputs[0].abspath()
+        html_contents, blocks = get_bocks( self.inputs[0].abspath() )
+        print 'blocks: %r' % blocks
         gb = self.generator.bld
         for block in blocks:
             Logs.debug( 'concatenating %r' % blocks[block] )
@@ -132,7 +194,9 @@ class generate_concatenation_tasks( Task ):
                     Logs.warn( 'file %s not found' % css_node.abspath() )
             gb.add_group()
             gb( name='concatenate', color='CYAN', rule=concatenate_files_fun, source=inputs, target=block ) 
-        gb( name='concat_update', color='PINK', rule=update_concat_fun, source=self.inputs[0], after='concatenate_files_fun', blocks = blocks )
+        t = gb( name='concat_update', color='PINK', rule=update_concat_fun, source=self.inputs[0], after='concatenate' )
+        t.blocks = blocks
+        t.html_contents = html_contents
 
 #-------------------------------------------------------------------------------
 @feature( 'html' )
