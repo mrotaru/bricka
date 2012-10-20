@@ -138,7 +138,6 @@ def update_concat_fun( task ):
         offsets[ start ] = end - start
 
         Logs.debug('offsets: %r' % offsets)
-        Logs.debug('script %s on line %s to %s' % (concatenated, start, end ))
         Logs.debug('start: %s, end: %s' % (start, end))
 
         indentation = utils.first_non_blank( lines[ start ] )
@@ -154,8 +153,6 @@ def update_concat_fun( task ):
             del_end = end+1
             Logs.debug('deleting lines %s-%s: %s' % ( del_start, del_end, '\n'.join(lines[ del_start:del_end ])))
             del lines[ del_start:del_end ]
-            Logs.debug('offset: %s' % offset )
-            Logs.debug('lines left: %s' % len( lines ) )
         else:
             Logs.warn('concat: Don\'t know how to insert %s into html; skipping...' % concatenated )
             continue
@@ -179,9 +176,8 @@ class generate_concatenation_tasks( Task ):
     after = [ 'minifier_update' ]
 
     def run( self ):
-        print 'src: %s' % self.inputs[0].abspath()
         html_contents, blocks = get_bocks( self.inputs[0].abspath() )
-        print 'blocks: %r' % blocks
+        Logs.debug('blocks: %r' % blocks)
         gb = self.generator.bld
         for block in blocks:
             Logs.debug( 'concatenating %r' % blocks[block] )
@@ -204,7 +200,6 @@ class generate_concatenation_tasks( Task ):
 def concatenation_tasks( self ):
     for node in self.source_list:
         src = self.bld.path.find_resource( node.nice_path() ) or node
-        out = node.get_bld()
         self.create_task( 'generate_concatenation_tasks', src, None )
 
 #-------------------------------------------------------------------------------
