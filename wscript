@@ -18,5 +18,4 @@ def build( bld ):
 
     # look for html files, which will be compressed.
     sources = bld.path.ant_glob( ['*.html'], exc='build' )
-    print bld
     bld( features='html', source_list = sources )

@@ -26,6 +26,7 @@ from waflib import Build, Logs
 
 import utils
 
+#-------------------------------------------------------------------------------
 def concatenate_files_fun( task ):
     files = []
     for file in task.inputs:
@@ -33,10 +34,6 @@ def concatenate_files_fun( task ):
     result = ''.join( read_entirely( file ) for file in files )
     with open( task.outputs[0].abspath(), 'w') as handle:
         handle.write( result )
-
-#-------------------------------------------------------------------------------
-class update_after_concat( Task ):
-    pass
 
 # {{{ extracts blocks which contain stuff to be concatenated Using the example at
 # the top, after parsing is complete, `blocks` would contain two items, each
@@ -135,9 +132,9 @@ class generate_concatenation_tasks( Task ):
                     Logs.warn( 'file %s not found' % css_node.abspath() )
             gb.add_group()
             gb( name='concatenate', color='CYAN', rule=concatenate_files_fun, source=inputs, target=block ) 
-        gb( name='concat_update', color='PINK', rule=update_concat_fun, source=self.inputs[0], after='concatenate_files_fun' )
+        gb( name='concat_update', color='PINK', rule=update_concat_fun, source=self.inputs[0], after='concatenate_files_fun', blocks = blocks )
 
-
+#-------------------------------------------------------------------------------
 @feature( 'html' )
 @after_method( 'generate_minification_tasks' )
 def concatenation_tasks( self ):
@@ -146,5 +143,6 @@ def concatenation_tasks( self ):
         out = node.get_bld()
         self.create_task( 'generate_concatenation_tasks', src, None )
 
+#-------------------------------------------------------------------------------
 def configure( conf ):
     pass
