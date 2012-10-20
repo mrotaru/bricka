@@ -43,7 +43,7 @@ class minify_css( Task ):
 
 # generate new HTML file, with script tags pointing to the generated minified versions
 #-------------------------------------------------------------------------------
-class update_html( Task ):
+class minifier_update( Task ):
     after = [ 'minify_js', 'minify_css' ]
     color = 'PINK'
 
@@ -178,7 +178,7 @@ def generate_minification_tasks( self ):
         # and css files. This task will have a 'tasks' attribute, a list of all the
         # minification tasks. `tasks` will be used to update the HTML only for
         # successfull minifications.
-        update_html_task = self.create_task( 'update_html', node, node.get_bld() )
+        update_html_task = self.create_task( 'minifier_update', node, node.get_bld() )
         update_html_task.tasks = self.tasks[:-1]
         update_html_task.html_contents = html_contents
 

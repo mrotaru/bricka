@@ -27,7 +27,7 @@ class compress_html_base( Task ):
             return compress_html_base.w_output_fun( self )
 
 class compress_html( compress_html_base ):
-    after = [ 'update_html' ]
+    after = [ 'update_minifier' ]
     def run( self ):
         compress_html_base.run( self )
         if( self.env[ 'closure_compiler' ] ):
@@ -43,7 +43,6 @@ def generate_html_compression_tasks( self ):
         # it doesn't exist, compress the file in the source directory and copy it to
         # the build directory.
         src = self.bld.path.find_resource( node.nice_path() )
-        print 'src: %s' % src.abspath()
         if src:
             self.create_task( 'compress_html', src, None )
         else:

@@ -20,16 +20,26 @@ import re
 import os
 from HTMLParser import HTMLParser
 
-from waflib.TaskGen import extension, feature, after_method
+from waflib.TaskGen import extension, feature, after_method, taskgen_method
 from waflib.Task import Task
+from waflib import Build
 
 import utils
 
-class concatenate( Task ):
-    def run( self ):
-        print 'files: '
-        print self.files
+#-------------------------------------------------------------------------------
+class concatenate_files( Task ):
+    after=[ 'minifier_update' ]
+    before=[ 'compress_html' ]
 
+    def run( self ):
+        files = []
+        for file in self.inputs:
+            files.append( file.abspath() )
+        result = ''.join( read_entirely( file ) for file in files )
+        with open( self.outputs[0].abspath(), 'w') as handle:
+            handle.write( result )
+
+#-------------------------------------------------------------------------------
 class update_after_concat( Task ):
     pass
 
@@ -101,40 +111,68 @@ def read_entirely( file ):
     with open( file, 'r' ) as handle:
         return handle.read()
 
-class scan_for_concatenations( Task ):
-    after = [ 'update_html' ]
+# update the HTML file to reference the concatenated files
+#-------------------------------------------------------------------------------
+class update_concat( Task ):
+    after = [ 'concatenate_files', 'generate_concatenation_tasks' ]
+    pass
+
+#-------------------------------------------------------------------------------
+def get_bocks( abspath ):
+    p = GetConcatBlocks()
+    p.feed( read_entirely( abspath ) )
+    return p.blocks
+
+def scan_for_concatenations( task ):
+    src = task.inputs[0]
+    p = GetConcatBlocks()
+    print 'parsing for concatenations: %s' % src.abspath()
+    p.feed( read_entirely( src.abspath() ) )
+    nodes = []
+
+    for block in p.blocks:
+        for file in p.blocks[block]['files']:
+            node = task.generator.bld.bldnode.find_node( file )
+            if node:
+                nodes.append( node )
+            else:
+                print 'node not found: %s' % file
+
+    return( nodes, [ p.blocks ] )
+
+#        tgt.parent.mkdir()
+#        tsk = self.generator.create_task( 'concatenate_files', blocks[ concat_target ]['files'], tgt )
+
+#-------------------------------------------------------------------------------
+class generate_concatenation_tasks( Task ):
+    after = [ 'minifier_update' ]
 
     def run( self ):
-        p = GetConcatBlocks()
-        p.feed( read_entirely( self.inputs[0].abspath() ) )
-        blocks = p.blocks
-
-        for concat_target in blocks.keys():
-            print 'concatenating ' + concat_target
-            tgt = self.generator.bld.path.make_node( concat_target )
-            tgt.parent.mkdir()
-            tsk = self.generator.create_task( 'concatenate', None, tgt, )
-            tsk.files = blocks[ concat_target ][ 'files' ]
-
-# generate a file which will consist of all files in `files` concatenated
-#-------------------------------------------------------------------------------
-def concatenate_files( dest, *files ):
-    result = '\n'.join( read_entirely( file ) for file in files )
-    with open(file, 'w') as handle:
-        handle.write( result )
+        blocks = get_bocks( self.inputs[0].abspath() )
+        print blocks
+        for block in blocks:
+            print 'concatenating %r' % blocks[block]
+            inputs = [] # files to be concatenated
+            for css in blocks[ block ]['files']:
+                css_node = self.generator.bld.bldnode.find_resource( css )
+                if css_node:
+                    inputs.append( css_node )
+                else:
+                    Logs.warn( 'file %s not found' % css_node.abspath() )
+            gb = self.generator.bld
+            print gb
+            gb.add_group()
+            print gb.env
+            gb( rule=concatenate_files, source=inputs, target=block ) 
 
 @feature( 'html' )
 @after_method( 'generate_minification_tasks' )
-def generate_concatenation_tasks( self ):
+def concatenation_tasks( self ):
     for node in self.source_list:
-
-        tools = self.bld.tools
-        if 'minifier' in tools:
-            tsk = utils.find_task( self, 'update_html', node.abspath() )
-            if tsk:
-                node = tsk.outputs[0]
-            
-        tsk = self.create_task( 'scan_for_concatenations', node, None )
+        src = self.bld.path.find_resource( node.nice_path() ) or node
+        out = node.get_bld()
+        self.create_task( 'generate_concatenation_tasks', src, None )
+    tsk = self.create_task( 'update_concat', node, None )
 
 def configure( conf ):
     pass
