@@ -22,22 +22,17 @@ from HTMLParser import HTMLParser
 
 from waflib.TaskGen import extension, feature, after_method, taskgen_method
 from waflib.Task import Task
-from waflib import Build
+from waflib import Build, Logs
 
 import utils
 
-#-------------------------------------------------------------------------------
-class concatenate_files( Task ):
-    after=[ 'minifier_update' ]
-    before=[ 'compress_html' ]
-
-    def run( self ):
-        files = []
-        for file in self.inputs:
-            files.append( file.abspath() )
-        result = ''.join( read_entirely( file ) for file in files )
-        with open( self.outputs[0].abspath(), 'w') as handle:
-            handle.write( result )
+def concatenate_files_fun( task ):
+    files = []
+    for file in task.inputs:
+        files.append( file.abspath() )
+    result = ''.join( read_entirely( file ) for file in files )
+    with open( task.outputs[0].abspath(), 'w') as handle:
+        handle.write( result )
 
 #-------------------------------------------------------------------------------
 class update_after_concat( Task ):
@@ -113,8 +108,7 @@ def read_entirely( file ):
 
 # update the HTML file to reference the concatenated files
 #-------------------------------------------------------------------------------
-class update_concat( Task ):
-    after = [ 'concatenate_files', 'generate_concatenation_tasks' ]
+def update_concat_fun( task ):
     pass
 
 #-------------------------------------------------------------------------------
@@ -123,35 +117,15 @@ def get_bocks( abspath ):
     p.feed( read_entirely( abspath ) )
     return p.blocks
 
-def scan_for_concatenations( task ):
-    src = task.inputs[0]
-    p = GetConcatBlocks()
-    print 'parsing for concatenations: %s' % src.abspath()
-    p.feed( read_entirely( src.abspath() ) )
-    nodes = []
-
-    for block in p.blocks:
-        for file in p.blocks[block]['files']:
-            node = task.generator.bld.bldnode.find_node( file )
-            if node:
-                nodes.append( node )
-            else:
-                print 'node not found: %s' % file
-
-    return( nodes, [ p.blocks ] )
-
-#        tgt.parent.mkdir()
-#        tsk = self.generator.create_task( 'concatenate_files', blocks[ concat_target ]['files'], tgt )
-
 #-------------------------------------------------------------------------------
 class generate_concatenation_tasks( Task ):
     after = [ 'minifier_update' ]
 
     def run( self ):
         blocks = get_bocks( self.inputs[0].abspath() )
-        print blocks
+        gb = self.generator.bld
         for block in blocks:
-            print 'concatenating %r' % blocks[block]
+            Logs.debug( 'concatenating %r' % blocks[block] )
             inputs = [] # files to be concatenated
             for css in blocks[ block ]['files']:
                 css_node = self.generator.bld.bldnode.find_resource( css )
@@ -159,11 +133,10 @@ class generate_concatenation_tasks( Task ):
                     inputs.append( css_node )
                 else:
                     Logs.warn( 'file %s not found' % css_node.abspath() )
-            gb = self.generator.bld
-            print gb
             gb.add_group()
-            print gb.env
-            gb( rule=concatenate_files, source=inputs, target=block ) 
+            gb( name='concatenate', color='CYAN', rule=concatenate_files_fun, source=inputs, target=block ) 
+        gb( name='concat_update', color='PINK', rule=update_concat_fun, source=self.inputs[0], after='concatenate_files_fun' )
+
 
 @feature( 'html' )
 @after_method( 'generate_minification_tasks' )
@@ -172,7 +145,6 @@ def concatenation_tasks( self ):
         src = self.bld.path.find_resource( node.nice_path() ) or node
         out = node.get_bld()
         self.create_task( 'generate_concatenation_tasks', src, None )
-    tsk = self.create_task( 'update_concat', node, None )
 
 def configure( conf ):
     pass
