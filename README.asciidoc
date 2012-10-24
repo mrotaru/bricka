@@ -1,3 +1,6 @@
 Build system for web projects.
 
-Inspired by `ant-build-script`, but using `waf` as a build system.
+Inspired by https://github.com/h5bp/ant-build-script[`ant-build-script`], but
+using http://code.google.com/p/waf/[`waf`] instead of `ant`. It is intended to
+automate optimization tasks - such as minification and concatenation of css and
+JavaScript files, and compression of HTML files.
