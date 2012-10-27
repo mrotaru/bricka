@@ -1,0 +1,36 @@
+import sys
+# vim: filetype=python:
+# {{{ imports
+from waflib.Task import Task
+from waflib.TaskGen import extension, after_method, before_method, feature
+from waflib import Logs, Errors, Utils #}}}
+
+
+# {{{ Minification
+@feature( 'html' )
+@before_method( 'generate_concatenation_tasks' )
+def generate_minification_tasks( self ):
+    for node in self.source_list:
+        print 'minify: %s' % node.abspath() #}}}
+
+# {{{ Concat
+@feature( 'html' )
+@before_method( 'generate_compression_tasks' )
+def generate_concatenation_tasks( self ):
+    for node in self.source_list:
+        print 'concat: %s' % node.abspath() #}}}
+
+# {{{ Compression
+@feature( 'html' )
+@after_method( 'generate_concatenation_tasks' )
+def generate_compression_tasks( self ):
+    for node in self.source_list:
+        print 'compress: %s' % node.abspath() #}}}
+
+
+def configure( ctx ):
+    pass
+
+def build( bld ): #{{{
+    sources = bld.path.ant_glob( ['*.html'], exc='build' )
+    bld( features='html', source_list=sources )
