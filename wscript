@@ -9,8 +9,8 @@ def configure( ctx ):
     ctx.env = ConfigSet('config/default.txt')
 
     # load tools
-#    ctx.load( 'minifier', tooldir='.' )
-#    ctx.load( 'compressor', tooldir='.' )
+    ctx.load( 'minifier', tooldir='.' )
+    ctx.load( 'compressor', tooldir='.' )
     ctx.load( 'concat', tooldir='.' )
 
 def build( bld ):

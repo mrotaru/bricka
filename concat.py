@@ -179,6 +179,7 @@ class generate_concatenation_tasks( Task ):
         html_contents, blocks = get_bocks( self.inputs[0].abspath() )
         Logs.debug('blocks: %r' % blocks)
         gb = self.generator.bld
+        gb.add_group('concatenations')
         for block in blocks:
             Logs.debug( 'concatenating %r' % blocks[block] )
             inputs = [] # files to be concatenated
@@ -188,11 +189,11 @@ class generate_concatenation_tasks( Task ):
                     inputs.append( css_node )
                 else:
                     Logs.warn( 'file %s not found' % css_node.abspath() )
-            gb.add_group()
-            gb( name='concatenate', color='CYAN', rule=concatenate_files_fun, source=inputs, target=block ) 
-        t = gb( name='concat_update', color='PINK', rule=update_concat_fun, source=self.inputs[0], after='concatenate' )
-        t.blocks = blocks
-        t.html_contents = html_contents
+            tg = gb( name='concatenate', color='CYAN', rule=concatenate_files_fun, source=inputs, target=block ) 
+            utils.print_tasks( tg )
+        tg = gb( name='concat_update', color='PINK', rule=update_concat_fun, source=self.inputs[0], before='compress_html' )
+        tg.blocks = blocks
+        tg.html_contents = html_contents
 
 #-------------------------------------------------------------------------------
 @feature( 'html' )
@@ -200,7 +201,14 @@ class generate_concatenation_tasks( Task ):
 def concatenation_tasks( self ):
     for node in self.source_list:
         src = self.bld.path.find_resource( node.nice_path() ) or node
-        self.create_task( 'generate_concatenation_tasks', src, None )
+        print 'concat src: %s' % src.abspath()
+        out = src.get_bld()
+        print 'concat out: %s' % out.abspath()
+        if src.abspath() == src.get_bld().abspath():
+            out.sig = None
+            out.parent.mkdir()
+        inp = [node]
+        self.create_task( 'generate_concatenation_tasks', inp, out )
 
 #-------------------------------------------------------------------------------
 def configure( conf ):

@@ -30,3 +30,13 @@ def first_non_blank( mstring, tabsize=4 ):
         else:
             return i
     return -1
+
+def print_tasks( tgen ):
+    """
+    Pretty-print a task generator's tasks, for debugging purposes.
+    """
+    if len( tgen.tasks ):
+        for t in tgen.tasks:
+            print t
+    else:
+        print 'no tasks for ' + str( tgen )
