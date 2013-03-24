@@ -5,28 +5,67 @@ from waflib.Task import Task
 from waflib.TaskGen import extension, after_method, before_method, feature
 from waflib import Logs, Errors, Utils #}}}
 
-
 # {{{ Minification
+class minify( Task ):
+    run_str = 'cp ${SRC[0].abspath()} ${TGT[0].abspath()} && echo "minified" >> ${TGT[0].abspath()}'
+class update_minify( Task ):
+    after = ['minify'] # all minifications of JavaScript files referenced in this file must be completed before creating an updated version of it
+    before = ['update_concat']
+    run_str = 'cp ${SRC[0].abspath()} ${TGT[0].abspath()} && echo "update_minify" >> ${TGT[0].abspath()}'
+
 @feature( 'html' )
 @before_method( 'generate_concatenation_tasks' )
 def generate_minification_tasks( self ):
     for node in self.source_list:
-        print 'minify: %s' % node.abspath() #}}}
+        print 'minify: %s' % node.abspath()
+        # scan for css and js to minify
+        js_node = self.bld.path.find_resource( 'js/main.js' )
+        tgt = js_node.get_bld()
+        tgt.parent.mkdir() # creates the `js` folder
+        tsk = self.create_task( 'minify', js_node, tgt )
+        tsk = self.create_task( 'update_minify', node, node.get_bld() )
+#}}}
 
 # {{{ Concat
+class concat( Task ):
+    run_str='cat ${SRC[0].abspath()} ${SRC[1].abspath()} > ${TGT[0].abspath()}'
+
+class update_concat( Task ):
+    after = ['concat', 'update_minify']
+    run_str = 'cp ${SRC[0].abspath()} ${TGT[0].abspath()} && echo "update_concat" >> ${TGT[0].abspath()}'
+
 @feature( 'html' )
 @before_method( 'generate_compression_tasks' )
 def generate_concatenation_tasks( self ):
     for node in self.source_list:
-        print 'concat: %s' % node.abspath() #}}}
+        print 'concat: %s' % node.abspath()
+        css1 = self.bld.path.find_resource( 'css/main.css' )
+        css2 = self.bld.path.find_resource( 'css/normalize.css' )
+        tgt = self.bld.path.make_node( 'concatenated.css' )
+        src = []
+        src.append(css1)
+        src.append(css2)
+        tgt.parent.mkdir() # creates the `js` folder
+        tsk = self.create_task( 'concat', src, tgt )
+        inode = self.bld.path.find_resource( node.nice_path() ) or node
+        out = node.get_bld()
+        out.sig = None
+#        out = node.change_ext('.html.1')
+        print 'concat in: %s' % inode.abspath()
+        print 'concat out: %s' % out.abspath()
+        tsk = self.create_task( 'update_concat', inode, out )
+#}}}
 
 # {{{ Compression
+class compress( Task ):
+    run_str = 'cp ${SRC[0].abspath()} ${TGT[0].abspath()} && echo "compressed" >> ${TGT[0].abspath()}'
+
 @feature( 'html' )
 @after_method( 'generate_concatenation_tasks' )
 def generate_compression_tasks( self ):
     for node in self.source_list:
-        print 'compress: %s' % node.abspath() #}}}
-
+        print 'compress: %s' % node.abspath()
+#}}}
 
 def configure( ctx ):
     pass

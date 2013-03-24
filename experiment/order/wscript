@@ -1,0 +1,70 @@
+# vim :set filetype=python
+import os
+import re
+from hashlib import md5
+from HTMLParser import HTMLParser
+
+from waflib.Task import Task
+from waflib.TaskGen import extension, after_method, before_method, feature
+from waflib import Logs, Errors, Utils
+
+def configure( ctx ):
+    ctx.env[ 'minifier_tool' ] = 'echo'
+    ctx.env[ 'compressor_tool' ] = 'echo'
+
+# minifier tool {{{
+class minify( Task ):
+    run_str = 'cp ${SRC[0].abspath()} ${TGT[0].abspath()} && echo "minified" >> ${TGT[0].abspath()}'
+
+class update( Task ):
+    after = [ 'minify' ] # all minifications of JavaScript files referenced in this file must be completed before creating an updated version of it
+    run_str = 'cp ${SRC[0].abspath()} ${TGT[0].abspath()} && echo "updated" >> ${TGT[0].abspath()}'
+
+@feature( 'html' )
+def generate_minification_tasks( self ):
+
+    for node in self.source_list:
+        # a custom HTML parser is used to find the js files linked from this HTML file
+        found_js = self.bld.path.find_resource( 'js/main.js' )
+        self.create_task( 'minify', found_js, found_js.change_ext( '.min.js' ) )
+
+        # update html
+        if( self.env.compressor_tool ):
+            out = node.change_ext( '.tmp.html' )
+        else:
+            out = node.get_bld()
+
+        tsk = self.create_task( 'update', node, out ) #}}}
+
+# compressor tool {{{
+class compress( Task ):
+    after = [ 'update' ]
+    run_str = 'cp ${SRC[0].abspath()} ${TGT[0].abspath()} && echo "compressed" >> ${TGT[0].abspath()}'
+
+@feature( 'html' )
+@after_method( 'generate_minification_tasks' )
+def generate_html_compression_tasks( self ):
+    src = None
+    out = None
+
+    for node in self.source_list:
+        if( self.env.minifier_tool ):
+            # find the 'update' task for this HTML file ...
+            for tsk in self.tasks:
+                if( tsk.__class__.__name__ == 'update' ):
+                    if( tsk.inputs[0].abspath() == node.abspath() ):
+                        out = tsk.outputs[0]
+                        out.sig = None
+                        src = out # ... and set it's output as the input for compression
+                        out = self.path.make_node( str(node) )
+        else: # minifier not loaded
+            src = node
+            out = node.get_bld()
+
+        if( not src ):
+            raise Errors.WafError('Source not found for %s' % str(node))
+        self.create_task( 'compress', src, out ) #}}}
+
+def build( bld ):
+    sources = bld.path.ant_glob( ['*.html'], exc='build' )
+    bld( features='html', source_list=sources )

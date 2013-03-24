@@ -5,3 +5,4 @@ waf-*
 *.pyc
 build/
 css/
+*/build/

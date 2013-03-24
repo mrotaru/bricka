@@ -1,0 +1,26 @@
+#!/usr/bin/env python
+# encoding: utf-8
+
+"""
+Goal: find a way to allow nested tasks
+"""
+
+import os
+from waflib.Configure import conf
+from waflib.Task import Task, compile_fun, ASK_LATER, RUN_ME
+from waflib.Node import split_path
+from waflib.TaskGen import extension, feature, after, after_method
+from waflib import Utils, Errors
+
+class minify( Task ):
+    run_str = 'cp ${SRC[0].abspath()} ${TGT[0].abspath()} && echo "minified" >> ${TGT[0].abspath()}'
+
+class concat( Task ):
+    run_str='cat ${SRC[0].abspath()} ${SRC[1].abspath()} > ${TGT[0].abspath()}'
+
+class GetBlocks( HTMLParser ):
+    wbs_concat_regex    = re.compile( '\s*build:\s*([a-z0-9])*\s*>\s*([A-Za-z.\-]+)\s*' )
+    wbs_end_regex       = re.compile( '\s*build:\s*end-([a-z0-9])*\s*' )
+
+    def __init__( self ):
+        HTMLParser.__init__( self )
